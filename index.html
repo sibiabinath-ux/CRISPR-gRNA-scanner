@@ -26,6 +26,14 @@ textarea {
   font-family: monospace;
 }
 
+select {
+  padding: 10px;
+  border-radius: 8px;
+  margin: 10px;
+  background: #0f172a;
+  color: white;
+}
+
 button {
   background: linear-gradient(45deg,#6366f1,#8b5cf6);
   color: white;
@@ -57,124 +65,38 @@ button {
   border: 1px solid #22c55e;
   background: #052e1b;
 }
-
-.safe { color: #22c55e; }
-.medium { color: #f59e0b; }
-.high { color: #ef4444; }
-
-.seq {
-  font-family: monospace;
-  word-wrap: break-word;
-}
-
-.highlight {
-  background: #22c55e;
-  color: black;
-  font-weight: bold;
-}
 </style>
 </head>
 
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-<p>Improved Visualization</p>
 
 <textarea id="seqInput" rows="5"></textarea><br>
+
+<select id="pamSelect">
+  <option value="NGG">NGG (SpCas9)</option>
+  <option value="TTTV">TTTV (Cas12a)</option>
+  <option value="NAG">NAG (Alternative)</option>
+</select>
+
+<br>
 <button onclick="analyze()">Analyze</button>
 
 <div id="output">Results will appear here</div>
 
 <script>
 
-let fullSequence = "";
-let chartInstance = null;
-
-function getRiskColor(risk){
-  if(risk==="SAFE") return "#22c55e";
-  if(risk==="MEDIUM") return "#f59e0b";
-  return "#ef4444";
-}
-
-function highlightSequence(start, length){
-  const before = fullSequence.slice(0, start);
-  const target = fullSequence.slice(start, start + length);
-  const after = fullSequence.slice(start + length);
-
-  document.getElementById("genome").innerHTML =
-    before +
-    `<span class="highlight">${target}</span>` +
-    after;
-}
-
-function drawChart(data){
-
-  const ctx = document.getElementById("chart").getContext("2d");
-
-  if(chartInstance) chartInstance.destroy();
-
-  chartInstance = new Chart(ctx, {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        label: "gRNA Distribution",
-        data: data.map(g => ({
-          x: g.gc + (Math.random()*1.5 - 0.75), // jitter for spacing
-          y: g.score + (Math.random()*1 - 0.5)
-        })),
-        backgroundColor: data.map(g => getRiskColor(g.risk)),
-        pointRadius: 8,
-        pointHoverRadius: 10
-      }]
-    },
-    options: {
-      animation: {
-        duration: 800
-      },
-      plugins: {
-        legend: {
-          labels: { color: "#e5e7eb" }
-        }
-      },
-      scales: {
-        x: {
-          min: 30,
-          max: 70,
-          grid: { color: "#1f2937" },
-          ticks: { color:"#e5e7eb" },
-          title: {
-            display: true,
-            text: "GC %",
-            color:"#8b5cf6"
-          }
-        },
-        y: {
-          min: 0,
-          max: 40,
-          grid: { color: "#1f2937" },
-          ticks: { color:"#e5e7eb" },
-          title: {
-            display: true,
-            text: "Score",
-            color:"#8b5cf6"
-          }
-        }
-      }
-    }
-  });
-}
-
 function analyze(){
 
   const input = document.getElementById("seqInput").value.toUpperCase();
+  const pam = document.getElementById("pamSelect").value;
   const output = document.getElementById("output");
 
   if(input.length < 23){
     alert("Enter at least 23 nt");
     return;
   }
-
-  fullSequence = input;
 
   output.innerHTML = "🧠 Running analysis...";
 
@@ -183,7 +105,10 @@ function analyze(){
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ sequence: input })
+    body: JSON.stringify({
+      sequence: input,
+      pam: pam
+    })
   })
   .then(res => res.json())
   .then(data => {
@@ -193,61 +118,20 @@ function analyze(){
       return;
     }
 
-    if(data.count === 0){
-      output.innerHTML = "No valid gRNA found";
-      return;
-    }
-
-    let html = "";
-
-    if(data.best){
-      html += `
-        <div class="card best" onclick="highlightSequence(${data.best.position},23)">
-          <h3>🎯 Best gRNA</h3>
-          <div class="seq">${data.best.sequence}</div>
-          <p>
-            Score: ${data.best.score} |
-            GC: ${data.best.gc}% |
-            ${data.best.risk}
-          </p>
-        </div>
-      `;
-    }
-
-    html += `<h3>Top gRNAs</h3>`;
+    let html = `<h3>Top gRNAs (${pam})</h3>`;
 
     data.top.forEach((g, i) => {
       html += `
-        <div class="card" onclick="highlightSequence(${g.position},23)">
-          <b>#${i+1}</b>
-          <div class="seq">${g.sequence}</div>
-          <p>
-            Score: ${g.score} |
-            GC: ${g.gc}% |
-            ${g.risk}
-          </p>
+        <div class="card">
+          #${i+1} ${g.sequence}<br>
+          Score: ${g.score} | GC: ${g.gc}% | ${g.risk}
         </div>
       `;
     });
 
-    html += `
-      <h3>🧬 Genome View</h3>
-      <div id="genome" class="seq">${fullSequence}</div>
-    `;
-
-    html += `
-      <h3>📊 GC vs Score (Enhanced)</h3>
-      <canvas id="chart" height="120"></canvas>
-    `;
-
     output.innerHTML = html;
-
-    drawChart(data.top);
-  })
-  .catch(err => {
-    output.innerHTML = "Backend error ❌";
-    console.error(err);
   });
+
 }
 
 </script>
