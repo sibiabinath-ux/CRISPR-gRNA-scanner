@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>CRISPR gRNA Scanner</title>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -54,10 +53,6 @@ button {
   cursor: pointer;
 }
 
-.card:hover {
-  background: #111827;
-}
-
 .best {
   border: 1px solid #22c55e;
   background: #052e1b;
@@ -77,17 +72,13 @@ button {
   color: black;
   font-weight: bold;
 }
-
-canvas {
-  margin-top: 20px;
-}
 </style>
 </head>
 
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-<p>Interactive genome + data visualization</p>
+<p>Improved Visualization</p>
 
 <textarea id="seqInput" rows="5"></textarea><br>
 <button onclick="analyze()">Analyze</button>
@@ -99,10 +90,10 @@ canvas {
 let fullSequence = "";
 let chartInstance = null;
 
-function getRiskClass(risk){
-  if(risk==="SAFE") return "safe";
-  if(risk==="MEDIUM") return "medium";
-  return "high";
+function getRiskColor(risk){
+  if(risk==="SAFE") return "#22c55e";
+  if(risk==="MEDIUM") return "#f59e0b";
+  return "#ef4444";
 }
 
 function highlightSequence(start, length){
@@ -126,27 +117,47 @@ function drawChart(data){
     type: 'scatter',
     data: {
       datasets: [{
-        label: "GC % vs Score",
+        label: "gRNA Distribution",
         data: data.map(g => ({
-          x: g.gc,
-          y: g.score
+          x: g.gc + (Math.random()*1.5 - 0.75), // jitter for spacing
+          y: g.score + (Math.random()*1 - 0.5)
         })),
-        backgroundColor: "#8b5cf6",
-        pointRadius: 6
+        backgroundColor: data.map(g => getRiskColor(g.risk)),
+        pointRadius: 8,
+        pointHoverRadius: 10
       }]
     },
     options: {
+      animation: {
+        duration: 800
+      },
       plugins: {
-        legend: { labels: { color: "#e5e7eb" } }
+        legend: {
+          labels: { color: "#e5e7eb" }
+        }
       },
       scales: {
         x: {
-          title: { display: true, text: "GC %", color:"#8b5cf6" },
-          ticks: { color:"#e5e7eb" }
+          min: 30,
+          max: 70,
+          grid: { color: "#1f2937" },
+          ticks: { color:"#e5e7eb" },
+          title: {
+            display: true,
+            text: "GC %",
+            color:"#8b5cf6"
+          }
         },
         y: {
-          title: { display: true, text: "Score", color:"#8b5cf6" },
-          ticks: { color:"#e5e7eb" }
+          min: 0,
+          max: 40,
+          grid: { color: "#1f2937" },
+          ticks: { color:"#e5e7eb" },
+          title: {
+            display: true,
+            text: "Score",
+            color:"#8b5cf6"
+          }
         }
       }
     }
@@ -197,13 +208,13 @@ function analyze(){
           <p>
             Score: ${data.best.score} |
             GC: ${data.best.gc}% |
-            <span class="${getRiskClass(data.best.risk)}">${data.best.risk}</span>
+            ${data.best.risk}
           </p>
         </div>
       `;
     }
 
-    html += `<h3>Top gRNAs (click to highlight)</h3>`;
+    html += `<h3>Top gRNAs</h3>`;
 
     data.top.forEach((g, i) => {
       html += `
@@ -213,7 +224,7 @@ function analyze(){
           <p>
             Score: ${g.score} |
             GC: ${g.gc}% |
-            <span class="${getRiskClass(g.risk)}">${g.risk}</span>
+            ${g.risk}
           </p>
         </div>
       `;
@@ -225,8 +236,8 @@ function analyze(){
     `;
 
     html += `
-      <h3>📊 GC vs Score</h3>
-      <canvas id="chart" width="400" height="200"></canvas>
+      <h3>📊 GC vs Score (Enhanced)</h3>
+      <canvas id="chart" height="120"></canvas>
     `;
 
     output.innerHTML = html;
