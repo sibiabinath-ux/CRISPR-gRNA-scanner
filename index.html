@@ -4,23 +4,16 @@
 <meta charset="UTF-8">
 <title>CRISPR gRNA Scanner</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
 body {
   background:#0b0b0f;
   color:#e5e7eb;
-  font-family:Inter, Arial;
+  font-family:Arial;
   text-align:center;
 }
 
-/* Title */
-h2 {
-  color:#a78bfa;
-  letter-spacing:1px;
-}
+h2 { color:#a78bfa; }
 
-/* Input */
 textarea {
   background:#111827;
   color:#e5e7eb;
@@ -28,76 +21,27 @@ textarea {
   padding:12px;
   border-radius:10px;
   width:80%;
-  font-size:14px;
 }
 
-/* Button */
 button {
   background:#6366f1;
   color:white;
-  padding:10px 22px;
+  padding:10px 20px;
   border:none;
   border-radius:8px;
-  margin:12px;
-  cursor:pointer;
-  transition:0.2s;
-}
-button:hover {
-  background:#4f46e5;
-}
-
-/* Cards */
-#bestSafe, #bestScore {
-  background:#111827;
-  border:1px solid #374151;
-  padding:15px;
   margin:10px;
-  border-radius:12px;
+  cursor:pointer;
 }
 
-/* Table */
-table {
-  margin:20px auto;
-  border-collapse:collapse;
-  width:90%;
-}
-
-th {
-  color:#a78bfa;
-  padding:12px;
-}
-
-td {
+#output {
+  margin-top:20px;
   padding:10px;
-  border-bottom:1px solid #1f2937;
-}
-
-tr:hover {
   background:#111827;
+  border-radius:10px;
+  width:80%;
+  margin-left:auto;
+  margin-right:auto;
 }
-
-/* Score colors */
-.high { color:#22c55e; }
-.medium { color:#f59e0b; }
-.low { color:#ef4444; }
-
-/* Heatmap */
-#heatmap span {
-  display:inline-block;
-  width:14px;
-  height:18px;
-  margin:2px;
-  border-radius:3px;
-  font-size:10px;
-  line-height:18px;
-  text-align:center;
-}
-
-/* subtle glow */
-.highlight {
-  box-shadow:0 0 12px rgba(167,139,250,0.4);
-}
-
 </style>
 </head>
 
@@ -105,243 +49,49 @@ tr:hover {
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
 
+<p style="color:#9ca3af;">Enter DNA sequence (≥ 23 nt)</p>
+
 <textarea id="seqInput" rows="5" placeholder="Paste DNA sequence"></textarea><br>
+
 <button onclick="analyze()">Analyze</button>
 
-<div id="bestSafe" class="highlight"></div>
-<div id="bestScore"></div>
-
-<div id="results"></div>
-
-<h3 style="color:#a78bfa;">📊 GC vs Score</h3>
-<canvas id="chart"></canvas>
-
-<h3 style="color:#a78bfa;">🧬 Sequence Heatmap</h3>
-<div id="heatmap"></div>
-
-<p style="font-size:12px;color:#6b7280;">
-GC-rich = purple | AT-rich = dark
-</p>
+<div id="output">Result will appear here</div>
 
 <script>
 
-// GC
-function gcContent(seq){
-  return (seq.match(/[GC]/g)||[]).length/seq.length*100;
-}
-
-// mismatch
-function mismatchCount(a,b){
-  let m=0;
-  for(let i=0;i<a.length;i++){
-    if(a[i]!==b[i]) m++;
-  }
-  return m;
-}
-
-// index
-function buildIndex(sequence){
-  const index={};
-  for(let i=0;i<=sequence.length-23;i++){
-    const sub=sequence.slice(i,i+23);
-    index[sub]=(index[sub]||0)+1;
-  }
-  return index;
-}
-
-// off-target
-function offTargetRisk(candidate,index){
-
-  if(index[candidate]>2) return "HIGH";
-
-  for(let key in index){
-    if(key===candidate) continue;
-
-    const mm=mismatchCount(candidate,key);
-
-    if(mm===1) return "MEDIUM";
-    if(mm===2) return "LOW";
-  }
-
-  return "SAFE";
-}
-
-// scoring
-function scoreGRNA(seq){
-
-  const spacer=seq.slice(0,20);
-  const pam=seq.slice(20);
-
-  let score=100;
-
-  if(!pam.endsWith("GG")) return 0;
-
-  const gc=gcContent(spacer);
-
-  if(gc<40||gc>70) score-=20;
-  if(spacer.includes("TTTT")) score-=30;
-
-  if(spacer[19]==="G") score+=5;
-  else if(spacer[19]==="C") score-=5;
-
-  return Math.max(0,score);
-}
-
-// scan
-function scanDNA(sequence){
-
-  const results=[];
-  const index=buildIndex(sequence);
-
-  for(let i=0;i<=sequence.length-23;i++){
-
-    const candidate=sequence.slice(i,i+23);
-    const spacer=candidate.slice(0,20);
-    const gc=gcContent(spacer);
-    const score=scoreGRNA(candidate);
-
-    if(score>0){
-
-      const risk=offTargetRisk(candidate,index);
-
-      const confidence = score - (
-        risk==="HIGH"?30:
-        risk==="MEDIUM"?15:0
-      );
-
-      results.push({
-        seq:candidate,
-        score:score,
-        pos:i+1,
-        gc:gc.toFixed(2),
-        risk:risk,
-        confidence:confidence
-      });
-    }
-  }
-
-  results.sort((a,b)=>b.score-a.score);
-
-  return results.slice(0,10);
-}
-
-// heatmap
-function renderHeatmap(seq){
-  const div=document.getElementById("heatmap");
-  div.innerHTML="";
-  for(let i=0;i<seq.length;i++){
-    let color=(seq[i]==="G"||seq[i]==="C")?"#a78bfa":"#1f2937";
-    div.innerHTML+=`<span style="background:${color}">${seq[i]}</span>`;
-  }
-}
-
-// chart
-function drawChart(results){
-
-  const ctx=document.getElementById('chart').getContext('2d');
-
-  if(window.myChart) window.myChart.destroy();
-
-  window.myChart = new Chart(ctx,{
-    type:'scatter',
-    data:{
-      datasets:[{
-        label:'GC vs Score',
-        data:results.map(r=>({
-          x:Number(r.gc)+(Math.random()*0.5-0.25),
-          y:r.score+(Math.random()*2-1)
-        })),
-        backgroundColor:'#a78bfa',
-        pointRadius:7
-      }]
-    },
-    options:{
-      plugins:{
-        legend:{labels:{color:'#e5e7eb'}}
-      },
-      scales:{
-        x:{
-          title:{display:true,text:'GC %',color:'#a78bfa'},
-          ticks:{color:'#9ca3af'},
-          grid:{color:'#1f2937'},
-          min:30,
-          max:80
-        },
-        y:{
-          title:{display:true,text:'Score',color:'#a78bfa'},
-          ticks:{color:'#9ca3af'},
-          grid:{color:'#1f2937'},
-          min:0,
-          max:120
-        }
-      }
-    }
-  });
-}
-
-// main
 function analyze(){
 
-  const input=document.getElementById("seqInput").value.toUpperCase();
-  const output=document.getElementById("results");
+  const input = document.getElementById("seqInput").value.toUpperCase();
+  const output = document.getElementById("output");
 
-  if(input.length<23){
+  if(input.length < 23){
     alert("Enter at least 23 nt");
     return;
   }
 
-  const results=scanDNA(input);
+  output.innerHTML = "Analyzing...";
 
-  const bestScore=results[0];
-  const bestSafe=results.find(r=>r.risk==="SAFE")||results[0];
+  fetch("https://crispr-backend.onrender.com/api/analyze", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      sequence: input
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
 
-  document.getElementById("bestScore").innerHTML=`
-  <h3>🏆 Highest Score</h3>
-  <p>${bestScore.seq.slice(0,20)}<span style="color:#a78bfa">${bestScore.seq.slice(20)}</span></p>
-  <p>Score: ${bestScore.score}</p>
-  `;
-
-  document.getElementById("bestSafe").innerHTML=`
-  <h3>🎯 Best SAFE gRNA</h3>
-  <p>${bestSafe.seq.slice(0,20)}<span style="color:#a78bfa">${bestSafe.seq.slice(20)}</span></p>
-  <p>Score: ${bestSafe.score} | Risk: ${bestSafe.risk}</p>
-  `;
-
-  let html=`
-  <table>
-  <tr>
-    <th>Rank</th>
-    <th>Sequence</th>
-    <th>Score</th>
-    <th>Pos</th>
-    <th>GC</th>
-    <th>Risk</th>
-    <th>Confidence</th>
-  </tr>
-  `;
-
-  results.forEach((r,i)=>{
-
-    let cls=r.score>=80?"high":r.score>=50?"medium":"low";
-
-    html+=`
-    <tr>
-      <td>${i+1}</td>
-      <td>${r.seq.slice(0,20)}<span style="color:#a78bfa">${r.seq.slice(20)}</span></td>
-      <td class="${cls}">${r.score}</td>
-      <td>${r.pos}</td>
-      <td>${r.gc}</td>
-      <td>${r.risk}</td>
-      <td>${r.confidence}</td>
-    </tr>
+    output.innerHTML = `
+      <p><b>Status:</b> ${data.message}</p>
+      <p><b>Sequence Length:</b> ${data.length}</p>
     `;
+  })
+  .catch(err => {
+    output.innerHTML = "Error connecting to backend ❌";
+    console.error(err);
   });
-
-  html+="</table>";
-  output.innerHTML=html;
-
-  renderHeatmap(input);
-  drawChart(results);
 }
 
 </script>
