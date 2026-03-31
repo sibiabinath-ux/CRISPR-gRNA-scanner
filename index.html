@@ -5,82 +5,118 @@
 <title>CRISPR gRNA Scanner</title>
 
 <style>
+
 body {
-  background:#0b0b0f;
-  color:#e5e7eb;
-  font-family:Arial;
-  text-align:center;
+  background: #05070d;
+  color: #e5e7eb;
+  font-family: 'Segoe UI', sans-serif;
+  text-align: center;
 }
 
+/* Title */
 h2 {
-  color:#a78bfa;
+  color: #8b5cf6;
+  letter-spacing: 1px;
 }
 
+/* Input */
 textarea {
-  background:#111827;
-  color:#e5e7eb;
-  border:1px solid #374151;
-  padding:12px;
-  border-radius:10px;
-  width:80%;
+  background: #0f172a;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  padding: 15px;
+  border-radius: 12px;
+  width: 80%;
+  font-family: monospace;
+  font-size: 14px;
+  box-shadow: 0 0 10px rgba(139,92,246,0.2);
 }
 
+/* Button */
 button {
-  background:#6366f1;
-  color:white;
-  padding:10px 20px;
-  border:none;
-  border-radius:8px;
-  margin:10px;
-  cursor:pointer;
-  transition:0.2s;
+  background: linear-gradient(45deg,#6366f1,#8b5cf6);
+  color: white;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 10px;
+  margin: 15px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.2s;
 }
 
 button:hover {
-  background:#4f46e5;
+  transform: scale(1.05);
 }
 
-button:active {
-  transform: scale(0.95);
-}
-
+/* Output */
 #output {
-  margin-top:20px;
-  padding:15px;
-  background:#111827;
-  border-radius:10px;
-  width:80%;
-  margin-left:auto;
-  margin-right:auto;
+  margin-top: 20px;
+  padding: 20px;
+  background: #0f172a;
+  border-radius: 12px;
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
+/* Cards */
 .card {
-  background:#1f2937;
-  padding:10px;
-  margin:10px;
-  border-radius:8px;
+  background: #020617;
+  padding: 15px;
+  margin: 10px;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
 }
 
+/* BEST */
 .best {
-  border:1px solid #22c55e;
+  border: 1px solid #22c55e;
+  background: #052e1b;
+  box-shadow: 0 0 15px rgba(34,197,94,0.3);
 }
+
+/* Sequence styling */
+.seq {
+  font-family: monospace;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+/* Glow bases */
+.g { color: #22c55e; text-shadow:0 0 6px #22c55e; }
+.c { color: #06b6d4; text-shadow:0 0 6px #06b6d4; }
+.a { color: #f59e0b; }
+.t { color: #ef4444; }
+
 </style>
 </head>
 
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-
-<p style="color:#9ca3af;">Enter DNA sequence (≥ 23 nt)</p>
+<p style="color:#94a3b8;">Benchling-style Live Analysis</p>
 
 <textarea id="seqInput" rows="5" placeholder="Paste DNA sequence..."></textarea><br>
 
 <button onclick="analyze()">Analyze</button>
 
-<div id="output">Result will appear here</div>
+<div id="output">Results will appear here</div>
 
 <script>
 
+/* 🔥 LIVE COLOR RENDER */
+function colorSeq(seq){
+  return seq.split("").map(base=>{
+    if(base==="G") return `<span class="g">G</span>`;
+    if(base==="C") return `<span class="c">C</span>`;
+    if(base==="A") return `<span class="a">A</span>`;
+    if(base==="T") return `<span class="t">T</span>`;
+    return base;
+  }).join("");
+}
+
+/* 🔥 MAIN FUNCTION */
 function analyze(){
 
   const input = document.getElementById("seqInput").value.toUpperCase();
@@ -91,16 +127,14 @@ function analyze(){
     return;
   }
 
-  output.innerHTML = "Analyzing...";
+  output.innerHTML = "🧠 Scanning genome...";
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      sequence: input
-    })
+    body: JSON.stringify({ sequence: input })
   })
   .then(res => res.json())
   .then(data => {
@@ -117,32 +151,39 @@ function analyze(){
 
     let html = "";
 
-    // ⭐ BEST GUIDE
+    /* 🎯 BEST */
     if(data.best){
       html += `
         <div class="card best">
-          <h3 style="color:#22c55e;">🎯 Best gRNA</h3>
-          <p><b>${data.best.sequence}</b></p>
-          <p>Score: ${data.best.score} | GC: ${data.best.gc}% | Position: ${data.best.position}</p>
+          <h3>🎯 Best gRNA</h3>
+          <div class="seq">${colorSeq(data.best.sequence)}</div>
+          <p>Score: ${data.best.score} | GC: ${data.best.gc}% | Pos: ${data.best.position}</p>
         </div>
       `;
     }
 
     html += `<h3>Top gRNAs</h3>`;
 
+    /* 🔥 LIST */
     data.top.forEach((g, i) => {
+
       html += `
         <div class="card">
-          <b>#${i+1}</b> ${g.sequence}<br>
-          Score: ${g.score} | GC: ${g.gc}% | Position: ${g.position}
+          <b>#${i+1}</b>
+          <div class="seq">${colorSeq(g.sequence)}</div>
+          <p>Score: ${g.score} | GC: ${g.gc}% | Pos: ${g.position}</p>
         </div>
       `;
     });
 
+    /* 🧬 LIVE GENOME HIGHLIGHT */
+    html += `<h3>🧬 Genome View</h3>`;
+    html += `<div class="card seq">${colorSeq(input)}</div>`;
+
     output.innerHTML = html;
   })
   .catch(err => {
-    output.innerHTML = "Error connecting to backend ❌";
+    output.innerHTML = "Backend error ❌";
     console.error(err);
   });
 }
