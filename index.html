@@ -39,7 +39,7 @@ button {
   padding: 20px;
   background: #0f172a;
   border-radius: 12px;
-  width: 85%;
+  width: 90%;
   margin: auto;
 }
 
@@ -48,6 +48,11 @@ button {
   padding: 15px;
   margin: 10px;
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.card:hover {
+  background: #111827;
 }
 
 .best {
@@ -61,6 +66,13 @@ button {
 
 .seq {
   font-family: monospace;
+  word-wrap: break-word;
+}
+
+.highlight {
+  background: #22c55e;
+  color: black;
+  font-weight: bold;
 }
 </style>
 </head>
@@ -68,7 +80,7 @@ button {
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-<p>Off-target aware analysis</p>
+<p>Click any guide to highlight it in genome</p>
 
 <textarea id="seqInput" rows="5"></textarea><br>
 <button onclick="analyze()">Analyze</button>
@@ -77,10 +89,26 @@ button {
 
 <script>
 
+let fullSequence = "";
+
+// Risk color
 function getRiskClass(risk){
   if(risk==="SAFE") return "safe";
   if(risk==="MEDIUM") return "medium";
   return "high";
+}
+
+// Highlight function
+function highlightSequence(start, length){
+
+  const before = fullSequence.slice(0, start);
+  const target = fullSequence.slice(start, start + length);
+  const after = fullSequence.slice(start + length);
+
+  document.getElementById("genome").innerHTML =
+    before +
+    `<span class="highlight">${target}</span>` +
+    after;
 }
 
 function analyze(){
@@ -93,7 +121,9 @@ function analyze(){
     return;
   }
 
-  output.innerHTML = "🧠 Running off-target analysis...";
+  fullSequence = input;
+
+  output.innerHTML = "🧠 Running analysis...";
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
@@ -120,35 +150,41 @@ function analyze(){
     // BEST
     if(data.best){
       html += `
-        <div class="card best">
+        <div class="card best"
+          onclick="highlightSequence(${data.best.position},23)">
           <h3>🎯 Best gRNA</h3>
           <div class="seq">${data.best.sequence}</div>
           <p>
             Score: ${data.best.score} |
             GC: ${data.best.gc}% |
-            <span class="${getRiskClass(data.best.risk)}">${data.best.risk}</span> |
-            Pos: ${data.best.position}
+            <span class="${getRiskClass(data.best.risk)}">${data.best.risk}</span>
           </p>
         </div>
       `;
     }
 
-    html += `<h3>Top gRNAs</h3>`;
+    html += `<h3>Top gRNAs (click to highlight)</h3>`;
 
     data.top.forEach((g, i) => {
       html += `
-        <div class="card">
+        <div class="card"
+          onclick="highlightSequence(${g.position},23)">
           <b>#${i+1}</b>
           <div class="seq">${g.sequence}</div>
           <p>
             Score: ${g.score} |
             GC: ${g.gc}% |
-            <span class="${getRiskClass(g.risk)}">${g.risk}</span> |
-            Pos: ${g.position}
+            <span class="${getRiskClass(g.risk)}">${g.risk}</span>
           </p>
         </div>
       `;
     });
+
+    // GENOME VIEW
+    html += `
+      <h3>🧬 Genome View</h3>
+      <div id="genome" class="seq">${fullSequence}</div>
+    `;
 
     output.innerHTML = html;
   })
