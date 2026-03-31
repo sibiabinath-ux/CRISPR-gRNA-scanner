@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <title>CRISPR gRNA Scanner</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
 body {
   background: #05070d;
@@ -58,12 +56,32 @@ button {
   padding: 15px;
   margin: 10px;
   border-radius: 10px;
-  cursor: pointer;
+  transition: 0.2s;
+}
+
+.card:hover {
+  transform: scale(1.02);
+  background: #111827;
 }
 
 .best {
   border: 1px solid #22c55e;
   background: #052e1b;
+}
+
+.loader {
+  border: 5px solid #1f2937;
+  border-top: 5px solid #8b5cf6;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  margin: auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
 }
 </style>
 </head>
@@ -77,13 +95,13 @@ button {
 <select id="pamSelect">
   <option value="NGG">NGG (SpCas9)</option>
   <option value="TTTV">TTTV (Cas12a)</option>
-  <option value="NAG">NAG (Alternative)</option>
+  <option value="NAG">NAG</option>
 </select>
 
 <br>
 <button onclick="analyze()">Analyze</button>
 
-<div id="output">Results will appear here</div>
+<div id="output"></div>
 
 <script>
 
@@ -98,17 +116,12 @@ function analyze(){
     return;
   }
 
-  output.innerHTML = "🧠 Running analysis...";
+  output.innerHTML = `<div class="loader"></div><p>Analyzing...</p>`;
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      sequence: input,
-      pam: pam
-    })
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ sequence: input, pam: pam })
   })
   .then(res => res.json())
   .then(data => {
@@ -118,7 +131,19 @@ function analyze(){
       return;
     }
 
-    let html = `<h3>Top gRNAs (${pam})</h3>`;
+    let html = "";
+
+    if(data.best){
+      html += `
+        <div class="card best">
+          <h3>🎯 Best Guide</h3>
+          ${data.best.sequence}<br>
+          Score: ${data.best.score} | GC: ${data.best.gc}% | ${data.best.risk}
+        </div>
+      `;
+    }
+
+    html += `<h3>Top gRNAs</h3>`;
 
     data.top.forEach((g, i) => {
       html += `
@@ -130,6 +155,11 @@ function analyze(){
     });
 
     output.innerHTML = html;
+
+  })
+  .catch(err => {
+    output.innerHTML = "Backend error ❌";
+    console.error(err);
   });
 
 }
