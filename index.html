@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <title>CRISPR gRNA Scanner</title>
 
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
 body {
   background: #05070d;
@@ -74,13 +77,17 @@ button {
   color: black;
   font-weight: bold;
 }
+
+canvas {
+  margin-top: 20px;
+}
 </style>
 </head>
 
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-<p>Click any guide to highlight it in genome</p>
+<p>Interactive genome + data visualization</p>
 
 <textarea id="seqInput" rows="5"></textarea><br>
 <button onclick="analyze()">Analyze</button>
@@ -90,17 +97,15 @@ button {
 <script>
 
 let fullSequence = "";
+let chartInstance = null;
 
-// Risk color
 function getRiskClass(risk){
   if(risk==="SAFE") return "safe";
   if(risk==="MEDIUM") return "medium";
   return "high";
 }
 
-// Highlight function
 function highlightSequence(start, length){
-
   const before = fullSequence.slice(0, start);
   const target = fullSequence.slice(start, start + length);
   const after = fullSequence.slice(start + length);
@@ -109,6 +114,43 @@ function highlightSequence(start, length){
     before +
     `<span class="highlight">${target}</span>` +
     after;
+}
+
+function drawChart(data){
+
+  const ctx = document.getElementById("chart").getContext("2d");
+
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: "GC % vs Score",
+        data: data.map(g => ({
+          x: g.gc,
+          y: g.score
+        })),
+        backgroundColor: "#8b5cf6",
+        pointRadius: 6
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { labels: { color: "#e5e7eb" } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: "GC %", color:"#8b5cf6" },
+          ticks: { color:"#e5e7eb" }
+        },
+        y: {
+          title: { display: true, text: "Score", color:"#8b5cf6" },
+          ticks: { color:"#e5e7eb" }
+        }
+      }
+    }
+  });
 }
 
 function analyze(){
@@ -147,11 +189,9 @@ function analyze(){
 
     let html = "";
 
-    // BEST
     if(data.best){
       html += `
-        <div class="card best"
-          onclick="highlightSequence(${data.best.position},23)">
+        <div class="card best" onclick="highlightSequence(${data.best.position},23)">
           <h3>🎯 Best gRNA</h3>
           <div class="seq">${data.best.sequence}</div>
           <p>
@@ -167,8 +207,7 @@ function analyze(){
 
     data.top.forEach((g, i) => {
       html += `
-        <div class="card"
-          onclick="highlightSequence(${g.position},23)">
+        <div class="card" onclick="highlightSequence(${g.position},23)">
           <b>#${i+1}</b>
           <div class="seq">${g.sequence}</div>
           <p>
@@ -180,13 +219,19 @@ function analyze(){
       `;
     });
 
-    // GENOME VIEW
     html += `
       <h3>🧬 Genome View</h3>
       <div id="genome" class="seq">${fullSequence}</div>
     `;
 
+    html += `
+      <h3>📊 GC vs Score</h3>
+      <canvas id="chart" width="400" height="200"></canvas>
+    `;
+
     output.innerHTML = html;
+
+    drawChart(data.top);
   })
   .catch(err => {
     output.innerHTML = "Backend error ❌";
