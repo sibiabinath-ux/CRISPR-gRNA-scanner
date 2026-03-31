@@ -5,7 +5,6 @@
 <title>CRISPR gRNA Scanner</title>
 
 <style>
-
 body {
   background: #05070d;
   color: #e5e7eb;
@@ -13,13 +12,8 @@ body {
   text-align: center;
 }
 
-/* Title */
-h2 {
-  color: #8b5cf6;
-  letter-spacing: 1px;
-}
+h2 { color: #8b5cf6; }
 
-/* Input */
 textarea {
   background: #0f172a;
   color: #e5e7eb;
@@ -28,11 +22,8 @@ textarea {
   border-radius: 12px;
   width: 80%;
   font-family: monospace;
-  font-size: 14px;
-  box-shadow: 0 0 10px rgba(139,92,246,0.2);
 }
 
-/* Button */
 button {
   background: linear-gradient(45deg,#6366f1,#8b5cf6);
   color: white;
@@ -41,82 +32,57 @@ button {
   border-radius: 10px;
   margin: 15px;
   cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
 }
 
-button:hover {
-  transform: scale(1.05);
-}
-
-/* Output */
 #output {
   margin-top: 20px;
   padding: 20px;
   background: #0f172a;
   border-radius: 12px;
   width: 85%;
-  margin-left: auto;
-  margin-right: auto;
+  margin: auto;
 }
 
-/* Cards */
 .card {
   background: #020617;
   padding: 15px;
   margin: 10px;
   border-radius: 10px;
-  border: 1px solid #1e293b;
 }
 
-/* BEST */
 .best {
   border: 1px solid #22c55e;
   background: #052e1b;
-  box-shadow: 0 0 15px rgba(34,197,94,0.3);
 }
 
-/* Sequence styling */
+.safe { color: #22c55e; }
+.medium { color: #f59e0b; }
+.high { color: #ef4444; }
+
 .seq {
   font-family: monospace;
-  font-size: 15px;
-  letter-spacing: 1px;
 }
-
-/* Glow bases */
-.g { color: #22c55e; text-shadow:0 0 6px #22c55e; }
-.c { color: #06b6d4; text-shadow:0 0 6px #06b6d4; }
-.a { color: #f59e0b; }
-.t { color: #ef4444; }
-
 </style>
 </head>
 
 <body>
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
-<p style="color:#94a3b8;">Benchling-style Live Analysis</p>
+<p>Off-target aware analysis</p>
 
-<textarea id="seqInput" rows="5" placeholder="Paste DNA sequence..."></textarea><br>
-
+<textarea id="seqInput" rows="5"></textarea><br>
 <button onclick="analyze()">Analyze</button>
 
 <div id="output">Results will appear here</div>
 
 <script>
 
-/* 🔥 LIVE COLOR RENDER */
-function colorSeq(seq){
-  return seq.split("").map(base=>{
-    if(base==="G") return `<span class="g">G</span>`;
-    if(base==="C") return `<span class="c">C</span>`;
-    if(base==="A") return `<span class="a">A</span>`;
-    if(base==="T") return `<span class="t">T</span>`;
-    return base;
-  }).join("");
+function getRiskClass(risk){
+  if(risk==="SAFE") return "safe";
+  if(risk==="MEDIUM") return "medium";
+  return "high";
 }
 
-/* 🔥 MAIN FUNCTION */
 function analyze(){
 
   const input = document.getElementById("seqInput").value.toUpperCase();
@@ -127,7 +93,7 @@ function analyze(){
     return;
   }
 
-  output.innerHTML = "🧠 Scanning genome...";
+  output.innerHTML = "🧠 Running off-target analysis...";
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
@@ -151,34 +117,38 @@ function analyze(){
 
     let html = "";
 
-    /* 🎯 BEST */
+    // BEST
     if(data.best){
       html += `
         <div class="card best">
           <h3>🎯 Best gRNA</h3>
-          <div class="seq">${colorSeq(data.best.sequence)}</div>
-          <p>Score: ${data.best.score} | GC: ${data.best.gc}% | Pos: ${data.best.position}</p>
+          <div class="seq">${data.best.sequence}</div>
+          <p>
+            Score: ${data.best.score} |
+            GC: ${data.best.gc}% |
+            <span class="${getRiskClass(data.best.risk)}">${data.best.risk}</span> |
+            Pos: ${data.best.position}
+          </p>
         </div>
       `;
     }
 
     html += `<h3>Top gRNAs</h3>`;
 
-    /* 🔥 LIST */
     data.top.forEach((g, i) => {
-
       html += `
         <div class="card">
           <b>#${i+1}</b>
-          <div class="seq">${colorSeq(g.sequence)}</div>
-          <p>Score: ${g.score} | GC: ${g.gc}% | Pos: ${g.position}</p>
+          <div class="seq">${g.sequence}</div>
+          <p>
+            Score: ${g.score} |
+            GC: ${g.gc}% |
+            <span class="${getRiskClass(g.risk)}">${g.risk}</span> |
+            Pos: ${g.position}
+          </p>
         </div>
       `;
     });
-
-    /* 🧬 LIVE GENOME HIGHLIGHT */
-    html += `<h3>🧬 Genome View</h3>`;
-    html += `<div class="card seq">${colorSeq(input)}</div>`;
 
     output.innerHTML = html;
   })
