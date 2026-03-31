@@ -31,11 +31,16 @@ button {
   border-radius:8px;
   margin:10px;
   cursor:pointer;
+  transition:0.2s;
+}
+
+button:active {
+  transform: scale(0.95);
 }
 
 #output {
   margin-top:20px;
-  padding:10px;
+  padding:15px;
   background:#111827;
   border-radius:10px;
   width:80%;
@@ -51,7 +56,7 @@ button {
 
 <p style="color:#9ca3af;">Enter DNA sequence (≥ 23 nt)</p>
 
-<textarea id="seqInput" rows="5" placeholder="Paste DNA sequence"></textarea><br>
+<textarea id="seqInput" rows="5"></textarea><br>
 
 <button onclick="analyze()">Analyze</button>
 
@@ -83,10 +88,28 @@ function analyze(){
   .then(res => res.json())
   .then(data => {
 
-    output.innerHTML = `
-      <p><b>Status:</b> ${data.message}</p>
-      <p><b>Sequence Length:</b> ${data.length}</p>
-    `;
+    if(data.error){
+      output.innerHTML = data.error;
+      return;
+    }
+
+    if(data.count === 0){
+      output.innerHTML = "No valid gRNA found";
+      return;
+    }
+
+    let html = `<h3>Top gRNAs</h3>`;
+
+    data.top.forEach((g, i) => {
+      html += `
+        <p>
+          <b>#${i+1}</b> ${g.sequence} <br>
+          Score: ${g.score} | GC: ${g.gc}% | Position: ${g.position}
+        </p>
+      `;
+    });
+
+    output.innerHTML = html;
   })
   .catch(err => {
     output.innerHTML = "Error connecting to backend ❌";
