@@ -12,7 +12,9 @@ body {
   text-align:center;
 }
 
-h2 { color:#a78bfa; }
+h2 {
+  color:#a78bfa;
+}
 
 textarea {
   background:#111827;
@@ -34,6 +36,10 @@ button {
   transition:0.2s;
 }
 
+button:hover {
+  background:#4f46e5;
+}
+
 button:active {
   transform: scale(0.95);
 }
@@ -47,6 +53,17 @@ button:active {
   margin-left:auto;
   margin-right:auto;
 }
+
+.card {
+  background:#1f2937;
+  padding:10px;
+  margin:10px;
+  border-radius:8px;
+}
+
+.best {
+  border:1px solid #22c55e;
+}
 </style>
 </head>
 
@@ -56,7 +73,7 @@ button:active {
 
 <p style="color:#9ca3af;">Enter DNA sequence (≥ 23 nt)</p>
 
-<textarea id="seqInput" rows="5"></textarea><br>
+<textarea id="seqInput" rows="5" placeholder="Paste DNA sequence..."></textarea><br>
 
 <button onclick="analyze()">Analyze</button>
 
@@ -98,14 +115,27 @@ function analyze(){
       return;
     }
 
-    let html = `<h3>Top gRNAs</h3>`;
+    let html = "";
+
+    // ⭐ BEST GUIDE
+    if(data.best){
+      html += `
+        <div class="card best">
+          <h3 style="color:#22c55e;">🎯 Best gRNA</h3>
+          <p><b>${data.best.sequence}</b></p>
+          <p>Score: ${data.best.score} | GC: ${data.best.gc}% | Position: ${data.best.position}</p>
+        </div>
+      `;
+    }
+
+    html += `<h3>Top gRNAs</h3>`;
 
     data.top.forEach((g, i) => {
       html += `
-        <p>
-          <b>#${i+1}</b> ${g.sequence} <br>
+        <div class="card">
+          <b>#${i+1}</b> ${g.sequence}<br>
           Score: ${g.score} | GC: ${g.gc}% | Position: ${g.position}
-        </p>
+        </div>
       `;
     });
 
