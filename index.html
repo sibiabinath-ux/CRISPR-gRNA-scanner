@@ -12,9 +12,7 @@ body {
   text-align: center;
 }
 
-h2 {
-  color: #8b5cf6;
-}
+h2 { color: #8b5cf6; }
 
 /* INPUT */
 textarea {
@@ -44,11 +42,9 @@ button {
   margin: 10px;
   border-radius: 8px;
   cursor: pointer;
-  transition: 0.2s;
 }
 
 .card:hover {
-  transform: scale(1.02);
   background: #111827;
 }
 
@@ -57,7 +53,7 @@ button {
   background: #052e1b;
 }
 
-/* GENOME VIEW */
+/* GENOME */
 #genome {
   margin-top: 20px;
   padding: 15px;
@@ -65,39 +61,25 @@ button {
   border-radius: 10px;
   font-family: monospace;
   text-align: left;
-  line-height: 1.6;
-  word-wrap: break-word;
+  line-height: 1.8;
+  overflow-x: auto;
 }
 
 /* HIGHLIGHT */
 .highlight-plus {
   background: #22c55e;
   color: black;
-  font-weight: bold;
-  box-shadow: 0 0 10px #22c55e;
+  border-radius: 4px;
+  padding: 2px;
+  box-shadow: 0 0 12px #22c55e;
 }
 
 .highlight-minus {
   background: #a855f7;
   color: black;
-  font-weight: bold;
-  box-shadow: 0 0 10px #a855f7;
-}
-
-/* LOADER */
-.loader {
-  border: 5px solid #1f2937;
-  border-top: 5px solid #8b5cf6;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  margin: auto;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg);}
-  100% { transform: rotate(360deg);}
+  border-radius: 4px;
+  padding: 2px;
+  box-shadow: 0 0 12px #a855f7;
 }
 </style>
 </head>
@@ -106,7 +88,7 @@ button {
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
 
-<input type="file" id="fileInput" accept=".fasta,.fa,.txt"><br>
+<input type="file" id="fileInput"><br>
 
 <textarea id="seqInput" rows="5"></textarea><br>
 
@@ -127,7 +109,7 @@ button {
 let fullSequence = "";
 let allResults = [];
 
-// FASTA
+// FASTA LOAD
 document.getElementById("fileInput").addEventListener("change", function(e){
   const file = e.target.files[0];
   const reader = new FileReader();
@@ -143,33 +125,47 @@ document.getElementById("fileInput").addEventListener("change", function(e){
 });
 
 
-// 🧬 FORMAT GENOME (LINE WRAP)
-function formatGenome(seq){
-  let formatted = "";
-  for(let i=0;i<seq.length;i+=80){
-    formatted += seq.slice(i,i+80) + "<br>";
-  }
-  return formatted;
+// 🧬 SAFE TEXT RENDER (NO HTML BREAK)
+function escapeHTML(str) {
+  return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 
-// 🎯 HIGHLIGHT WITH STRAND COLOR
+// 🧬 FORMAT GENOME
+function formatGenome(seq){
+  let lines = [];
+  for(let i=0;i<seq.length;i+=80){
+    lines.push(seq.slice(i,i+80));
+  }
+  return lines.join("<br>");
+}
+
+
+// 🎯 FIXED HIGHLIGHT (NO STRING BREAK)
 function highlightGuide(pos, strand){
 
   const len = 23;
 
-  const before = fullSequence.slice(0, pos);
-  const target = fullSequence.slice(pos, pos + len);
-  const after = fullSequence.slice(pos + len);
+  const before = escapeHTML(fullSequence.slice(0, pos));
+  const target = escapeHTML(fullSequence.slice(pos, pos + len));
+  const after = escapeHTML(fullSequence.slice(pos + len));
 
   const cls = strand === "+" ? "highlight-plus" : "highlight-minus";
 
-  document.getElementById("genome").innerHTML =
-    formatGenome(
-      before +
-      `<span class="${cls}">${target}</span>` +
-      after
-    );
+  const html =
+    before +
+    `<span class="${cls}" id="target">${target}</span>` +
+    after;
+
+  document.getElementById("genome").innerHTML = formatGenome(html);
+
+  // AUTO SCROLL
+  setTimeout(()=>{
+    document.getElementById("target")?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }, 100);
 }
 
 
@@ -178,7 +174,6 @@ function analyze(){
 
   const seq = document.getElementById("seqInput").value.toUpperCase();
   const pam = document.getElementById("pamSelect").value;
-  const output = document.getElementById("output");
 
   if(seq.length < 23){
     alert("Enter at least 23 nt");
@@ -186,8 +181,6 @@ function analyze(){
   }
 
   fullSequence = seq;
-
-  output.innerHTML = `<div class="loader"></div><p>Analyzing...</p>`;
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
@@ -220,12 +213,10 @@ function analyze(){
       </div>`;
     });
 
-    output.innerHTML = html;
-
+    document.getElementById("output").innerHTML = html;
     document.getElementById("genome").innerHTML = formatGenome(seq);
 
   });
-
 }
 
 
