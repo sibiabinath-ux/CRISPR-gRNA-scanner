@@ -1,188 +1,126 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>CRISPR gRNA Scanner</title>
+from fastapi import FastAPI
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-<style>
-body {
-  background: #05070d;
-  color: #e5e7eb;
-  font-family: 'Segoe UI', sans-serif;
-  text-align: center;
-}
+app = FastAPI()
 
-h2 { color: #8b5cf6; }
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-textarea {
-  background: #0f172a;
-  color: #e5e7eb;
-  border: 1px solid #334155;
-  padding: 15px;
-  border-radius: 12px;
-  width: 80%;
-  font-family: monospace;
-}
-
-input[type="file"] {
-  margin: 10px;
-}
-
-button {
-  background: linear-gradient(45deg,#6366f1,#8b5cf6);
-  color: white;
-  padding: 12px 25px;
-  border: none;
-  border-radius: 10px;
-  margin: 15px;
-  cursor: pointer;
-}
-
-#output {
-  margin-top: 20px;
-  padding: 20px;
-  background: #0f172a;
-  border-radius: 12px;
-  width: 90%;
-  margin: auto;
-}
-
-.card {
-  background: #020617;
-  padding: 15px;
-  margin: 10px;
-  border-radius: 10px;
-}
-
-.best {
-  border: 1px solid #22c55e;
-  background: #052e1b;
-}
-
-.loader {
-  border: 5px solid #1f2937;
-  border-top: 5px solid #8b5cf6;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  margin: auto;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg);}
-  100% { transform: rotate(360deg);}
-}
-</style>
-</head>
-
-<body>
-
-<h2>🧬 CRISPR gRNA Scanner</h2>
-
-<p>Paste sequence OR upload FASTA</p>
-
-<input type="file" id="fileInput" accept=".fasta,.fa,.txt"><br>
-
-<textarea id="seqInput" rows="5"></textarea><br>
-
-<select id="pamSelect">
-  <option value="NGG">NGG (SpCas9)</option>
-  <option value="TTTV">TTTV (Cas12a)</option>
-</select>
-
-<br>
-<button onclick="analyze()">Analyze</button>
-
-<div id="output"></div>
-
-<script>
-
-// 📁 FILE UPLOAD HANDLER
-document.getElementById("fileInput").addEventListener("change", function(e){
-
-  const file = e.target.files[0];
-  if(!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = function(event){
-
-    let text = event.target.result;
-
-    // Remove FASTA header lines
-    text = text.replace(/^>.*$/gm, "");
-
-    // Remove non-DNA chars
-    text = text.replace(/[^ATCG]/gi, "");
-
-    document.getElementById("seqInput").value = text;
-  };
-
-  reader.readAsText(file);
-});
+class Request(BaseModel):
+    sequence: str
+    pam: str = "NGG"
 
 
-function analyze(){
+# 🔁 Reverse complement
+def reverse_complement(seq):
+    complement = {"A":"T","T":"A","C":"G","G":"C"}
+    return "".join(complement.get(b, b) for b in reversed(seq))
 
-  const input = document.getElementById("seqInput").value.toUpperCase();
-  const pam = document.getElementById("pamSelect").value;
-  const output = document.getElementById("output");
 
-  if(input.length < 23){
-    alert("Enter at least 23 nt");
-    return;
-  }
+def match_pam(seq, pam):
+    for a, b in zip(seq, pam):
+        if b != "N" and a != b:
+            return False
+    return True
 
-  output.innerHTML = `<div class="loader"></div><p>Analyzing...</p>`;
 
-  fetch("https://crispr-backend.onrender.com/api/analyze", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ sequence: input, pam: pam })
-  })
-  .then(res => res.json())
-  .then(data => {
+def scan_sequence(seq, pam_type, strand_label):
 
-    if(data.error){
-      output.innerHTML = data.error;
-      return;
+    results = []
+    n = len(seq)
+
+    for i in range(n - 23):
+
+        window = seq[i:i+23]
+
+        if pam_type == "NGG":
+            spacer = window[:20]
+            pam = window[-3:]
+
+        elif pam_type == "TTTV":
+            pam = window[:4]
+            spacer = window[4:24]
+
+        else:
+            pam_len = len(pam_type)
+            spacer = window[:20]
+            pam = window[-pam_len:]
+
+        if not match_pam(pam, pam_type):
+            continue
+
+        gc = (spacer.count("G") + spacer.count("C")) * 5
+
+        score = 0
+
+        if 40 <= gc <= 60:
+            score += 20
+        else:
+            score -= 10
+
+        if spacer[-1] == "G":
+            score += 10
+
+        if "TTTT" in spacer:
+            score -= 10
+
+        if gc < 40:
+            risk = "HIGH"
+        elif gc > 65:
+            risk = "MEDIUM"
+        else:
+            risk = "SAFE"
+
+        results.append({
+            "sequence": window,
+            "score": score,
+            "position": i,
+            "gc": gc,
+            "risk": risk,
+            "strand": strand_label
+        })
+
+    return results
+
+
+@app.post("/api/analyze")
+def analyze(req: Request):
+
+    seq = req.sequence.upper()
+    pam_type = req.pam.upper()
+
+    if len(seq) < 23:
+        return {"error": "Sequence too short"}
+
+    # Forward
+    forward_results = scan_sequence(seq, pam_type, "+")
+
+    # Reverse
+    rev_seq = reverse_complement(seq)
+    reverse_results = scan_sequence(rev_seq, pam_type, "-")
+
+    results = forward_results + reverse_results
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+
+    best = None
+    for r in results:
+        if r["risk"] == "SAFE":
+            best = r
+            break
+
+    if not best and results:
+        best = results[0]
+
+    return {
+        "count": len(results),
+        "top": results[:10],
+        "best": best,
+        "all": results
     }
-
-    let html = "";
-
-    if(data.best){
-      html += `
-        <div class="card best">
-          <h3>🎯 Best Guide</h3>
-          ${data.best.sequence}<br>
-          Score: ${data.best.score} | GC: ${data.best.gc}% | ${data.best.risk}
-        </div>
-      `;
-    }
-
-    html += `<h3>Top gRNAs</h3>`;
-
-    data.top.forEach((g, i) => {
-      html += `
-        <div class="card">
-          #${i+1} ${g.sequence}<br>
-          Score: ${g.score} | GC: ${g.gc}% | ${g.risk}
-        </div>
-      `;
-    });
-
-    output.innerHTML = html;
-
-  })
-  .catch(err => {
-    output.innerHTML = "Backend error ❌";
-    console.error(err);
-  });
-
-}
-
-</script>
-
-</body>
-</html>
