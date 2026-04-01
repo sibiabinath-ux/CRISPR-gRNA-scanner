@@ -24,12 +24,8 @@ textarea {
   font-family: monospace;
 }
 
-select {
-  padding: 10px;
-  border-radius: 8px;
+input[type="file"] {
   margin: 10px;
-  background: #0f172a;
-  color: white;
 }
 
 button {
@@ -56,12 +52,6 @@ button {
   padding: 15px;
   margin: 10px;
   border-radius: 10px;
-  transition: 0.2s;
-}
-
-.card:hover {
-  transform: scale(1.02);
-  background: #111827;
 }
 
 .best {
@@ -90,12 +80,15 @@ button {
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
 
+<p>Paste sequence OR upload FASTA</p>
+
+<input type="file" id="fileInput" accept=".fasta,.fa,.txt"><br>
+
 <textarea id="seqInput" rows="5"></textarea><br>
 
 <select id="pamSelect">
   <option value="NGG">NGG (SpCas9)</option>
   <option value="TTTV">TTTV (Cas12a)</option>
-  <option value="NAG">NAG</option>
 </select>
 
 <br>
@@ -104,6 +97,31 @@ button {
 <div id="output"></div>
 
 <script>
+
+// 📁 FILE UPLOAD HANDLER
+document.getElementById("fileInput").addEventListener("change", function(e){
+
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(event){
+
+    let text = event.target.result;
+
+    // Remove FASTA header lines
+    text = text.replace(/^>.*$/gm, "");
+
+    // Remove non-DNA chars
+    text = text.replace(/[^ATCG]/gi, "");
+
+    document.getElementById("seqInput").value = text;
+  };
+
+  reader.readAsText(file);
+});
+
 
 function analyze(){
 
