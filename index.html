@@ -12,33 +12,76 @@ body {
   text-align: center;
 }
 
+h2 { color: #8b5cf6; }
+
 textarea {
   width: 80%;
-  padding: 12px;
+  padding: 15px;
   background: #0f172a;
   color: white;
   border-radius: 10px;
+  font-family: monospace;
+}
+
+input[type="file"] {
+  margin: 10px;
 }
 
 button {
   padding: 10px 20px;
   margin: 10px;
-  background: #6366f1;
+  background: linear-gradient(45deg,#6366f1,#8b5cf6);
   color: white;
   border: none;
   border-radius: 8px;
+  cursor: pointer;
 }
 
 .card {
   background: #020617;
-  padding: 10px;
+  padding: 12px;
   margin: 10px;
   border-radius: 8px;
+  cursor: pointer;
+}
+
+.card:hover {
+  background: #111827;
 }
 
 .best {
   border: 1px solid #22c55e;
   background: #052e1b;
+}
+
+.highlight {
+  background: #22c55e;
+  color: black;
+  font-weight: bold;
+}
+
+#genome {
+  margin-top: 20px;
+  padding: 10px;
+  background: #020617;
+  border-radius: 8px;
+  word-wrap: break-word;
+  font-family: monospace;
+}
+
+.loader {
+  border: 5px solid #1f2937;
+  border-top: 5px solid #8b5cf6;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  margin: auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
 }
 </style>
 </head>
@@ -47,11 +90,15 @@ button {
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
 
-<textarea id="seqInput"></textarea><br>
+<p>Paste DNA OR upload FASTA</p>
+
+<input type="file" id="fileInput" accept=".fasta,.fa,.txt"><br>
+
+<textarea id="seqInput" rows="5"></textarea><br>
 
 <select id="pamSelect">
-  <option value="NGG">NGG</option>
-  <option value="TTTV">TTTV</option>
+  <option value="NGG">NGG (SpCas9)</option>
+  <option value="TTTV">TTTV (Cas12a)</option>
 </select>
 
 <br>
@@ -60,14 +107,67 @@ button {
 
 <div id="output"></div>
 
+<div id="genome"></div>
+
 <script>
 
+let fullSequence = "";
 let allResults = [];
 
+// 📁 FASTA UPLOAD
+document.getElementById("fileInput").addEventListener("change", function(e){
+
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(event){
+
+    let text = event.target.result;
+
+    // remove headers
+    text = text.replace(/^>.*$/gm, "");
+
+    // remove non DNA
+    text = text.replace(/[^ATCG]/gi, "");
+
+    document.getElementById("seqInput").value = text;
+  };
+
+  reader.readAsText(file);
+});
+
+
+// 🎯 HIGHLIGHT FUNCTION
+function highlightGuide(pos, length){
+
+  const before = fullSequence.slice(0, pos);
+  const target = fullSequence.slice(pos, pos + length);
+  const after = fullSequence.slice(pos + length);
+
+  document.getElementById("genome").innerHTML =
+    before +
+    `<span class="highlight">${target}</span>` +
+    after;
+}
+
+
+// 🚀 ANALYZE
 function analyze(){
 
-  const seq = document.getElementById("seqInput").value;
+  const seq = document.getElementById("seqInput").value.toUpperCase();
   const pam = document.getElementById("pamSelect").value;
+  const output = document.getElementById("output");
+
+  if(seq.length < 23){
+    alert("Enter at least 23 nt");
+    return;
+  }
+
+  fullSequence = seq;
+
+  output.innerHTML = `<div class="loader"></div><p>Analyzing...</p>`;
 
   fetch("https://crispr-backend.onrender.com/api/analyze", {
     method: "POST",
@@ -83,26 +183,35 @@ function analyze(){
 
     if(data.best){
       html += `
-      <div class="card best">
-        <b>Best Guide</b><br>
+      <div class="card best" onclick="highlightGuide(${data.best.position},23)">
+        <b>🎯 Best Guide</b><br>
         ${data.best.sequence}<br>
         Score: ${data.best.score} | GC: ${data.best.gc}% | ${data.best.risk} | Strand: ${data.best.strand}
       </div>`;
     }
 
+    html += `<h3>Top gRNAs (click to highlight)</h3>`;
+
     data.top.forEach(g=>{
       html += `
-      <div class="card">
+      <div class="card" onclick="highlightGuide(${g.position},23)">
         ${g.sequence}<br>
         Score: ${g.score} | GC: ${g.gc}% | ${g.risk} | Strand: ${g.strand}
       </div>`;
     });
 
-    document.getElementById("output").innerHTML = html;
+    output.innerHTML = html;
+
+    document.getElementById("genome").innerHTML = seq;
+
+  })
+  .catch(err=>{
+    output.innerHTML = "Backend error ❌";
   });
 }
 
 
+// 📊 CSV EXPORT
 function downloadCSV(){
 
   let csv = "Sequence,Score,GC,Risk,Strand,Position\n";
