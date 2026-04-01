@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>CRISPR Scanner</title>
+<title>CRISPR Nexus</title>
 
 <style>
 
@@ -13,9 +13,17 @@ body{
   text-align:center;
 }
 
-h2{color:#8b5cf6}
+/* TITLE */
+h1{
+  color:#8b5cf6;
+  margin-top:20px;
+}
 
-/* FAKE TEXTAREA */
+p{
+  color:#9ca3af;
+}
+
+/* EDITOR */
 #editor{
   width:80%;
   min-height:120px;
@@ -24,11 +32,9 @@ h2{color:#8b5cf6}
   background:#0f172a;
   border-radius:10px;
   font-family:monospace;
-  color:white;
   text-align:left;
   outline:none;
   white-space:pre-wrap;
-  word-break:break-word;
 }
 
 /* BUTTON */
@@ -42,24 +48,42 @@ button{
   cursor:pointer;
 }
 
-/* CARDS */
+/* CARD */
 .card{
   background:#020617;
   padding:10px;
   margin:10px;
   border-radius:8px;
-  cursor:pointer;
 }
 
-.card:hover{background:#111827}
+.card:hover{
+  background:#111827;
+}
+
+/* BEST */
+.best{
+  border:1px solid #22c55e;
+  background:#052e1b;
+}
 
 /* HIGHLIGHT */
 .highlight{
   background:#22c55e;
   color:black;
   border-radius:4px;
-  box-shadow:0 0 12px #22c55e;
-  padding:2px;
+  box-shadow:0 0 10px #22c55e;
+}
+
+/* MESSAGE */
+#message{
+  color:#f87171;
+  margin-top:10px;
+}
+
+/* LOADING */
+#loading{
+  margin-top:20px;
+  color:#a78bfa;
 }
 
 </style>
@@ -67,7 +91,8 @@ button{
 
 <body>
 
-<h2>🧬 CRISPR gRNA Scanner</h2>
+<h1>🧬 CRISPR Nexus</h1>
+<p>A web-based CRISPR gRNA design tool with PAM selection, FASTA upload, and interactive genome visualization.</p>
 
 <input type="file" id="fileInput"><br><br>
 
@@ -75,39 +100,50 @@ button{
 Paste DNA sequence here...
 </div>
 
+<div id="message"></div>
+
+<br>
+
+<select id="pamSelect">
+  <option value="NGG">NGG (SpCas9)</option>
+  <option value="TTTV">TTTV (Cas12a)</option>
+</select>
+
 <br>
 
 <button onclick="analyze()">Analyze</button>
+<button onclick="downloadCSV()">Download CSV</button>
 
+<div id="loading"></div>
 <div id="output"></div>
 
 <script>
 
-let rawSequence = "";
-let results = [];
+let rawSequence="";
+let allResults=[];
 
 
 // FASTA UPLOAD
 document.getElementById("fileInput").addEventListener("change", function(e){
 
-  const file = e.target.files[0];
-  const reader = new FileReader();
+  const file=e.target.files[0];
+  const reader=new FileReader();
 
-  reader.onload = function(event){
+  reader.onload=function(event){
 
-    let text = event.target.result;
+    let text=event.target.result;
 
-    text = text.replace(/^>.*$/gm,"");
-    text = text.replace(/[^ATCG]/gi,"");
+    text=text.replace(/^>.*$/gm,"");
+    text=text.replace(/[^ATCG]/gi,"");
 
-    document.getElementById("editor").innerText = text;
+    document.getElementById("editor").innerText=text;
   };
 
   reader.readAsText(file);
 });
 
 
-// GET CLEAN TEXT
+// GET SEQUENCE
 function getSequence(){
   return document.getElementById("editor").innerText
     .toUpperCase()
@@ -118,63 +154,105 @@ function getSequence(){
 // ANALYZE
 function analyze(){
 
-  const seq = getSequence();
+  const seq=getSequence();
+  const pam=document.getElementById("pamSelect").value;
 
-  if(seq.length < 23){
-    alert("Enter ≥ 23 nt");
+  document.getElementById("message").innerText="";
+  document.getElementById("output").innerHTML="";
+
+  if(seq.length<23){
+    document.getElementById("message").innerText="⚠️ Sequence must be at least 23 nt";
     return;
   }
 
-  rawSequence = seq;
+  rawSequence=seq;
+
+  // 🔄 LOADING
+  document.getElementById("loading").innerText="🔄 Scanning genome...";
 
   fetch("https://crispr-backend.onrender.com/api/analyze",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({sequence:seq})
+    body:JSON.stringify({sequence:seq,pam:pam})
   })
   .then(res=>res.json())
   .then(data=>{
 
-    results = data.top;
+    document.getElementById("loading").innerText="";
 
-    let html = "<h3>Top gRNAs</h3>";
+    allResults=data.all;
+
+    let html="";
+
+    if(data.best){
+      html+=`
+      <div class="card best">
+        🎯 Best gRNA<br>
+        ${data.best.sequence}<br>
+        Score: ${data.best.score} | GC: ${data.best.gc}% | ${data.best.risk}
+        <br>
+        <button onclick="copySeq('${data.best.sequence}')">Copy</button>
+      </div>`;
+    }
+
+    html+="<h3>Top gRNAs</h3>";
 
     data.top.forEach(g=>{
-      html += `
-      <div class="card" onclick="highlight(${g.position})">
+      html+=`
+      <div class="card">
         ${g.sequence}<br>
-        Score: ${g.score} | GC: ${g.gc}%
+        Score: ${g.score} | GC: ${g.gc}% | ${g.risk}
+        <br>
+        <button onclick="copySeq('${g.sequence}')">Copy</button>
+        <button onclick="highlight(${g.position})">Highlight</button>
       </div>`;
     });
 
-    document.getElementById("output").innerHTML = html;
+    document.getElementById("output").innerHTML=html;
+
+  })
+  .catch(()=>{
+    document.getElementById("loading").innerText="❌ Error connecting backend";
   });
 }
 
 
-// 🔥 MAIN FEATURE: HIGHLIGHT IN TOP EDITOR
+// COPY
+function copySeq(seq){
+  navigator.clipboard.writeText(seq);
+}
+
+
+// HIGHLIGHT
 function highlight(pos){
 
-  const len = 23;
+  const len=23;
 
-  const before = rawSequence.slice(0,pos);
-  const target = rawSequence.slice(pos,pos+len);
-  const after = rawSequence.slice(pos+len);
+  const before=rawSequence.slice(0,pos);
+  const target=rawSequence.slice(pos,pos+len);
+  const after=rawSequence.slice(pos+len);
 
-  const html =
-    before +
-    `<span class="highlight">${target}</span>` +
-    after;
+  document.getElementById("editor").innerHTML=
+    before+`<span class="highlight">${target}</span>`+after;
+}
 
-  document.getElementById("editor").innerHTML = html;
 
-  // scroll into view
-  setTimeout(()=>{
-    document.querySelector(".highlight")?.scrollIntoView({
-      behavior:"smooth",
-      block:"center"
-    });
-  },100);
+// CSV
+function downloadCSV(){
+
+  let csv="Sequence,Score,GC,Risk,Strand,Position\n";
+
+  allResults.forEach(g=>{
+    csv+=`${g.sequence},${g.score},${g.gc},${g.risk},${g.strand},${g.position}\n`;
+  });
+
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="grna_results.csv";
+  a.click();
 }
 
 </script>
