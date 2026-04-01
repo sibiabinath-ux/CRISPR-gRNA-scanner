@@ -6,14 +6,17 @@
 
 <style>
 body {
-  background: #05070d;
+  background: #030712;
   color: #e5e7eb;
   font-family: 'Segoe UI', sans-serif;
   text-align: center;
 }
 
-h2 { color: #8b5cf6; }
+h2 {
+  color: #8b5cf6;
+}
 
+/* INPUT */
 textarea {
   width: 80%;
   padding: 15px;
@@ -23,10 +26,7 @@ textarea {
   font-family: monospace;
 }
 
-input[type="file"] {
-  margin: 10px;
-}
-
+/* BUTTON */
 button {
   padding: 10px 20px;
   margin: 10px;
@@ -37,15 +37,18 @@ button {
   cursor: pointer;
 }
 
+/* CARDS */
 .card {
   background: #020617;
   padding: 12px;
   margin: 10px;
   border-radius: 8px;
   cursor: pointer;
+  transition: 0.2s;
 }
 
 .card:hover {
+  transform: scale(1.02);
   background: #111827;
 }
 
@@ -54,21 +57,34 @@ button {
   background: #052e1b;
 }
 
-.highlight {
+/* GENOME VIEW */
+#genome {
+  margin-top: 20px;
+  padding: 15px;
+  background: #020617;
+  border-radius: 10px;
+  font-family: monospace;
+  text-align: left;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+/* HIGHLIGHT */
+.highlight-plus {
   background: #22c55e;
   color: black;
   font-weight: bold;
+  box-shadow: 0 0 10px #22c55e;
 }
 
-#genome {
-  margin-top: 20px;
-  padding: 10px;
-  background: #020617;
-  border-radius: 8px;
-  word-wrap: break-word;
-  font-family: monospace;
+.highlight-minus {
+  background: #a855f7;
+  color: black;
+  font-weight: bold;
+  box-shadow: 0 0 10px #a855f7;
 }
 
+/* LOADER */
 .loader {
   border: 5px solid #1f2937;
   border-top: 5px solid #8b5cf6;
@@ -90,8 +106,6 @@ button {
 
 <h2>🧬 CRISPR gRNA Scanner</h2>
 
-<p>Paste DNA OR upload FASTA</p>
-
 <input type="file" id="fileInput" accept=".fasta,.fa,.txt"><br>
 
 <textarea id="seqInput" rows="5"></textarea><br>
@@ -106,7 +120,6 @@ button {
 <button onclick="downloadCSV()">Download CSV</button>
 
 <div id="output"></div>
-
 <div id="genome"></div>
 
 <script>
@@ -114,24 +127,15 @@ button {
 let fullSequence = "";
 let allResults = [];
 
-// 📁 FASTA UPLOAD
+// FASTA
 document.getElementById("fileInput").addEventListener("change", function(e){
-
   const file = e.target.files[0];
-  if(!file) return;
-
   const reader = new FileReader();
 
   reader.onload = function(event){
-
     let text = event.target.result;
-
-    // remove headers
     text = text.replace(/^>.*$/gm, "");
-
-    // remove non DNA
     text = text.replace(/[^ATCG]/gi, "");
-
     document.getElementById("seqInput").value = text;
   };
 
@@ -139,21 +143,37 @@ document.getElementById("fileInput").addEventListener("change", function(e){
 });
 
 
-// 🎯 HIGHLIGHT FUNCTION
-function highlightGuide(pos, length){
-
-  const before = fullSequence.slice(0, pos);
-  const target = fullSequence.slice(pos, pos + length);
-  const after = fullSequence.slice(pos + length);
-
-  document.getElementById("genome").innerHTML =
-    before +
-    `<span class="highlight">${target}</span>` +
-    after;
+// 🧬 FORMAT GENOME (LINE WRAP)
+function formatGenome(seq){
+  let formatted = "";
+  for(let i=0;i<seq.length;i+=80){
+    formatted += seq.slice(i,i+80) + "<br>";
+  }
+  return formatted;
 }
 
 
-// 🚀 ANALYZE
+// 🎯 HIGHLIGHT WITH STRAND COLOR
+function highlightGuide(pos, strand){
+
+  const len = 23;
+
+  const before = fullSequence.slice(0, pos);
+  const target = fullSequence.slice(pos, pos + len);
+  const after = fullSequence.slice(pos + len);
+
+  const cls = strand === "+" ? "highlight-plus" : "highlight-minus";
+
+  document.getElementById("genome").innerHTML =
+    formatGenome(
+      before +
+      `<span class="${cls}">${target}</span>` +
+      after
+    );
+}
+
+
+// ANALYZE
 function analyze(){
 
   const seq = document.getElementById("seqInput").value.toUpperCase();
@@ -183,18 +203,18 @@ function analyze(){
 
     if(data.best){
       html += `
-      <div class="card best" onclick="highlightGuide(${data.best.position},23)">
-        <b>🎯 Best Guide</b><br>
+      <div class="card best" onclick="highlightGuide(${data.best.position}, '${data.best.strand}')">
+        🎯 Best Guide<br>
         ${data.best.sequence}<br>
         Score: ${data.best.score} | GC: ${data.best.gc}% | ${data.best.risk} | Strand: ${data.best.strand}
       </div>`;
     }
 
-    html += `<h3>Top gRNAs (click to highlight)</h3>`;
+    html += `<h3>Top gRNAs</h3>`;
 
     data.top.forEach(g=>{
       html += `
-      <div class="card" onclick="highlightGuide(${g.position},23)">
+      <div class="card" onclick="highlightGuide(${g.position}, '${g.strand}')">
         ${g.sequence}<br>
         Score: ${g.score} | GC: ${g.gc}% | ${g.risk} | Strand: ${g.strand}
       </div>`;
@@ -202,16 +222,14 @@ function analyze(){
 
     output.innerHTML = html;
 
-    document.getElementById("genome").innerHTML = seq;
+    document.getElementById("genome").innerHTML = formatGenome(seq);
 
-  })
-  .catch(err=>{
-    output.innerHTML = "Backend error ❌";
   });
+
 }
 
 
-// 📊 CSV EXPORT
+// CSV
 function downloadCSV(){
 
   let csv = "Sequence,Score,GC,Risk,Strand,Position\n";
